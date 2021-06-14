@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"regexp"
+	"strings"
 	"text/template"
 
 	"github.com/Masterminds/sprig"
@@ -43,6 +44,7 @@ func main() {
 		log.Fatal(err)
 	}
 	funcMap := sprig.GenericFuncMap()
+	funcMap["joinstr"] = func(a, b string) string { return a + b }
 	// TODO for cloud spanner type...
 	funcMap["GoType"] = func(f *ast.FieldDefinition) string {
 		switch f.Type.NamedType {
@@ -55,8 +57,42 @@ func main() {
 		}
 		return ""
 	}
+	funcMap["exists"] = func(d *ast.Definition, name string) bool {
+		f := funcMap["camelcase"]
+		if tocamel, ok := f.(func(string) string); ok {
+
+			for _, it := range d.Fields {
+				if tocamel(it.Name) == name {
+					return true
+				}
+			}
+		}
+		return false
+
+	}
+	funcMap["foundPK"] = func(objName string, fields ast.FieldList) bool {
+		fm := funcMap["camelcase"]
+		if tocamel, ok := fm.(func(string) string); ok {
+			for _, f := range fields {
+				desc := f.Description
+				if strings.Contains(desc, "SpannerPK") {
+					return true
+				}
+				if tocamel(f.Name) == "Id" {
+					return true
+				}
+				if tocamel(f.Name) == tocamel(objName+"Id") {
+					return true
+				}
+
+			}
+		}
+		return false
+	}
 	tpl := template.Must(template.New(t).Funcs(template.FuncMap(funcMap)).Parse(string(tb)))
-	tpl.Execute(os.Stdout, *body)
+	if err := tpl.Execute(os.Stdout, *body); err != nil {
+		log.Fatal(err)
+	}
 }
 func read(file string) ([]byte, error) {
 	b, err := ioutil.ReadFile(file)

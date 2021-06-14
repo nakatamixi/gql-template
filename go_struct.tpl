@@ -5,14 +5,18 @@ import (
     "time"
 )
 
+
 {{- range $ti, $t  := .Types }}
   {{- if not $t.BuiltIn }}
     {{- if eq $t.Kind "OBJECT" }}
       {{- if and (ne $t.Name "Query") (ne $t.Name "Mutation") (ne $t.Name "Subscription") }}
 type {{ $t.Name | title }} struct {
+    {{ if not (foundPK $t.Name $t.Fields) }}{{ joinstr (camelcase $t.Name) "Id" }}   string `spanner:"{{ untitle (joinstr $t.Name "Id") }}"`{{ end }}
         {{- range $fi, $f  := $t.Fields }}
-    {{ $f.Name | title }}   {{ GoType $f }}
+    {{ $f.Name | camelcase }}   {{ GoType $f }} `spanner:"{{ $f.Name }}" json:"{{ $f.Name }}"`
         {{- end }}
+    {{ if not (exists $t "CreatedAt") }}CreatedAt   time.Time `spanner:"createdAt"`{{ end }}
+    {{ if not (exists $t "UpdatedAt") }}UpdatedAt   time.Time `spanner:"updatedAt"`{{ end }}
 }
       {{- end }}
     {{- end }}
