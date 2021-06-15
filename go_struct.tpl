@@ -10,7 +10,7 @@ import (
     {{- if eq $t.Kind "OBJECT" }}
       {{- if and (ne $t.Name "Query") (ne $t.Name "Mutation") (ne $t.Name "Subscription") }}
 type {{ $t.Name | title }} struct {
-    {{ if not (foundPK $t.Name $t.Fields) }}{{ joinstr (camelcase $t.Name) "Id" }}   string `spanner:"{{ untitle (joinstr $t.Name "Id") }}"`{{ end }}
+    {{ if eq (foundPK $t.Name $t.Fields) "" }}{{ joinstr (camelcase $t.Name) "Id" }}   string `spanner:"{{ untitle (joinstr $t.Name "Id") }}"`{{ end }}
         {{- range $fi, $f  := $t.Fields }}
           {{- $cfn := ConvertObjectFieldName $f }}
     {{ $f.Name | title }}   {{ GoType $f false }} `{{ if (eq $cfn $f.Name) }}spanner:"{{ $f.Name }}" {{ end }}json:"{{ $f.Name }}"`
