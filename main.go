@@ -10,12 +10,15 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/sprig"
+	"github.com/huandu/xstrings"
+	"github.com/jinzhu/inflection"
 	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
 )
 
 var (
-	gotypeRe = regexp.MustCompile(`^GoType: ?(.*)$`)
+	gotypeRe     = regexp.MustCompile(`^GoType: ?(.*)$`)
+	spanColumnRe = regexp.MustCompile(`^SpannerColumn: ?(.*)$`)
 )
 
 func main() {
@@ -46,48 +49,65 @@ func main() {
 	funcMap := sprig.GenericFuncMap()
 	funcMap["joinstr"] = func(a, b string) string { return a + b }
 	// TODO for cloud spanner type...
-	funcMap["GoType"] = func(f *ast.FieldDefinition) string {
+	funcMap["GoType"] = func(f *ast.FieldDefinition, replaceObjectType bool) string {
 		switch f.Type.NamedType {
 		case "ID", "String", "Int", "Float", "Boolean":
-			return addPtPrefixIfNull(f.Type) + goSingleType(f.Type, body)
+			return addPtPrefixIfNull(f.Type) + goSingleType(f.Type, body, replaceObjectType)
 		case "": //list
-			return "[]" + addPtPrefixIfNull(f.Type.Elem) + goSingleType(f.Type.Elem, body)
+			return "[]" + addPtPrefixIfNull(f.Type.Elem) + goSingleType(f.Type.Elem, body, replaceObjectType)
 		default: // custom scalar, other object
-			return addPtPrefixIfNull(f.Type) + goSingleType(f.Type, body)
+			return addPtPrefixIfNull(f.Type) + goSingleType(f.Type, body, replaceObjectType)
 		}
 		return ""
 	}
 	funcMap["exists"] = func(d *ast.Definition, name string) bool {
-		f := funcMap["camelcase"]
-		if tocamel, ok := f.(func(string) string); ok {
-
-			for _, it := range d.Fields {
-				if tocamel(it.Name) == name {
-					return true
-				}
+		for _, it := range d.Fields {
+			if xstrings.ToCamelCase(it.Name) == name {
+				return true
 			}
 		}
 		return false
 
 	}
 	funcMap["foundPK"] = func(objName string, fields ast.FieldList) bool {
-		fm := funcMap["camelcase"]
-		if tocamel, ok := fm.(func(string) string); ok {
-			for _, f := range fields {
-				desc := f.Description
-				if strings.Contains(desc, "SpannerPK") {
-					return true
-				}
-				if tocamel(f.Name) == "Id" {
-					return true
-				}
-				if tocamel(f.Name) == tocamel(objName+"Id") {
-					return true
-				}
-
+		for _, f := range fields {
+			desc := f.Description
+			if strings.Contains(desc, "SpannerPK") {
+				return true
 			}
+			if xstrings.ToCamelCase(f.Name) == "Id" {
+				return true
+			}
+			if xstrings.ToCamelCase(f.Name) == xstrings.ToCamelCase(objName+"Id") {
+				return true
+			}
+
 		}
 		return false
+	}
+	funcMap["ConvertObjectFieldName"] = func(f *ast.FieldDefinition) string {
+		desc := f.Description
+		match := spanColumnRe.FindStringSubmatch(desc)
+		if match != nil && len(match) > 1 {
+			return match[1]
+		}
+		namedType := f.Type.NamedType
+		isArray := false
+		if f.Type.NamedType == "" {
+			isArray = true
+			namedType = f.Type.Elem.NamedType
+		}
+		if def, ok := body.Types[namedType]; ok {
+			if def.Kind == "OBJECT" {
+				if isArray {
+					return inflection.Plural(inflection.Singular(f.Name) + "Id")
+				}
+				return f.Name + "Id"
+			} else {
+				return f.Name
+			}
+		}
+		return f.Name
 	}
 	tpl := template.Must(template.New(t).Funcs(template.FuncMap(funcMap)).Parse(string(tb)))
 	if err := tpl.Execute(os.Stdout, *body); err != nil {
@@ -109,7 +129,7 @@ func addPtPrefixIfNull(t *ast.Type) string {
 	return "*"
 }
 
-func goSingleType(t *ast.Type, body *ast.Schema) string {
+func goSingleType(t *ast.Type, body *ast.Schema, replace bool) string {
 	switch t.NamedType {
 	case "ID", "String":
 		return "string"
@@ -120,14 +140,25 @@ func goSingleType(t *ast.Type, body *ast.Schema) string {
 	case "Boolean":
 		return "bool"
 	default:
-		if t, ok := body.Types[t.NamedType]; ok {
-			match := gotypeRe.FindStringSubmatch(t.Description)
+		if def, ok := body.Types[t.NamedType]; ok {
+			match := gotypeRe.FindStringSubmatch(def.Description)
 			if match != nil && len(match) > 1 {
 				return match[1]
 			}
+			if !replace {
+				return t.NamedType
+			}
+			for _, f := range def.Fields {
+				desc := f.Description
+				if strings.Contains(desc, "SpannerPK") || xstrings.ToCamelCase(f.Name) == "Id" || xstrings.ToCamelCase(f.Name) == xstrings.ToCamelCase(t.NamedType+"Id") {
+					return goSingleType(f.Type, body, replace)
+				}
+
+			}
+			return "string"
 		}
-		return t.NamedType
 	}
+	log.Fatalf("not found type %s", t.NamedType)
 	return ""
 }
 
