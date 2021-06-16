@@ -10,7 +10,7 @@ import (
 	"text/template"
 
 	"github.com/Masterminds/sprig"
-	"github.com/huandu/xstrings"
+	"github.com/iancoleman/strcase"
 	"github.com/jinzhu/inflection"
 	"github.com/vektah/gqlparser/v2"
 	"github.com/vektah/gqlparser/v2/ast"
@@ -47,6 +47,8 @@ func main() {
 		log.Fatal(err)
 	}
 	funcMap := sprig.GenericFuncMap()
+	// sprig camelcase (xstrings.ToCamelCase) is not valid
+	funcMap["upperCamel"] = func(a string) string { return strcase.ToCamel(strings.ToLower(a)) }
 	funcMap["joinstr"] = func(a, b string) string { return a + b }
 	// TODO for cloud spanner type...
 	funcMap["GoType"] = func(f *ast.FieldDefinition, replaceObjectType bool) string {
@@ -62,7 +64,7 @@ func main() {
 	}
 	funcMap["exists"] = func(d *ast.Definition, name string) bool {
 		for _, it := range d.Fields {
-			if xstrings.ToCamelCase(it.Name) == name {
+			if strcase.ToCamel(it.Name) == name {
 				return true
 			}
 		}
@@ -72,7 +74,7 @@ func main() {
 	funcMap["foundPK"] = func(objName string, fields ast.FieldList) string {
 		for _, f := range fields {
 			desc := f.Description
-			if strings.Contains(desc, "SpannerPK") || xstrings.ToCamelCase(f.Name) == "Id" || xstrings.ToCamelCase(f.Name) == xstrings.ToCamelCase(objName+"Id") {
+			if strings.Contains(desc, "SpannerPK") || strcase.ToCamel(f.Name) == "Id" || strcase.ToCamel(f.Name) == strcase.ToCamel(objName+"Id") {
 				return f.Name
 			}
 
@@ -144,7 +146,7 @@ func goSingleType(t *ast.Type, body *ast.Schema, replace bool) string {
 			}
 			for _, f := range def.Fields {
 				desc := f.Description
-				if strings.Contains(desc, "SpannerPK") || xstrings.ToCamelCase(f.Name) == "Id" || xstrings.ToCamelCase(f.Name) == xstrings.ToCamelCase(t.NamedType+"Id") {
+				if strings.Contains(desc, "SpannerPK") || strcase.ToCamel(f.Name) == "Id" || strcase.ToCamel(f.Name) == strcase.ToCamel(t.NamedType+"Id") {
 					return goSingleType(f.Type, body, replace)
 				}
 
