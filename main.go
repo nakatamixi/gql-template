@@ -62,6 +62,44 @@ func main() {
 		}
 		return ""
 	}
+	funcMap["SpannerGoType"] = func(f *ast.FieldDefinition, replaceObjectType bool) string {
+		switch f.Type.NamedType {
+		case "ID", "String":
+			if f.Type.NonNull {
+				return goSingleType(f.Type, body, replaceObjectType)
+			}
+			return "spanner.NullString"
+		case "Int":
+			if f.Type.NonNull {
+				return goSingleType(f.Type, body, replaceObjectType)
+			}
+			return "spanner.NullInt64"
+
+		case "Float":
+			if f.Type.NonNull {
+				return goSingleType(f.Type, body, replaceObjectType)
+			}
+			return "spanner.NullFloat64"
+		case "Boolean":
+			if f.Type.NonNull {
+				return goSingleType(f.Type, body, replaceObjectType)
+			}
+			return "spanner.NullBool"
+		case "": //list
+			return "[]" + addPtPrefixIfNull(f.Type.Elem) + goSingleType(f.Type.Elem, body, replaceObjectType)
+		default: // custom scalar, other object
+			if def, ok := body.Types[f.Type.NamedType]; ok {
+				if def.Kind == "ENUM" {
+					if f.Type.NonNull {
+						return addPtPrefixIfNull(f.Type) + goSingleType(f.Type, body, replaceObjectType)
+					}
+					return "spanner.NullString"
+				}
+			}
+			return addPtPrefixIfNull(f.Type) + goSingleType(f.Type, body, replaceObjectType)
+		}
+		return ""
+	}
 	funcMap["exists"] = func(d *ast.Definition, name string) bool {
 		for _, it := range d.Fields {
 			if strcase.ToCamel(it.Name) == name {
