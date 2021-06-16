@@ -64,42 +64,7 @@ func main() {
 		return ""
 	}
 	funcMap["SpannerGoType"] = func(f *ast.FieldDefinition, replaceObjectType bool) string {
-		switch f.Type.NamedType {
-		case "ID", "String":
-			if f.Type.NonNull {
-				return goSingleType(f.Type, body, replaceObjectType)
-			}
-			return "spanner.NullString"
-		case "Int":
-			if f.Type.NonNull {
-				return goSingleType(f.Type, body, replaceObjectType)
-			}
-			return "spanner.NullInt64"
-
-		case "Float":
-			if f.Type.NonNull {
-				return goSingleType(f.Type, body, replaceObjectType)
-			}
-			return "spanner.NullFloat64"
-		case "Boolean":
-			if f.Type.NonNull {
-				return goSingleType(f.Type, body, replaceObjectType)
-			}
-			return "spanner.NullBool"
-		case "": //list
-			return "[]" + addPtPrefixIfNull(f.Type.Elem) + goSingleType(f.Type.Elem, body, replaceObjectType)
-		default: // custom scalar, other object
-			if def, ok := body.Types[f.Type.NamedType]; ok {
-				if def.Kind == "ENUM" {
-					if f.Type.NonNull {
-						return addPtPrefixIfNull(f.Type) + goSingleType(f.Type, body, replaceObjectType)
-					}
-					return "spanner.NullString"
-				}
-			}
-			return addPtPrefixIfNull(f.Type) + goSingleType(f.Type, body, replaceObjectType)
-		}
-		return ""
+		return spannerGoSingleType(f, body, replaceObjectType)
 	}
 	funcMap["exists"] = func(d *ast.Definition, name string) bool {
 		for _, it := range d.Fields {
@@ -196,7 +161,57 @@ func goSingleType(t *ast.Type, body *ast.Schema, replace bool) string {
 	log.Fatalf("not found type %s", t.NamedType)
 	return ""
 }
+func spannerGoSingleType(f *ast.FieldDefinition, body *ast.Schema, replaceObjectType bool) string {
+	switch f.Type.NamedType {
+	case "ID", "String":
+		if f.Type.NonNull {
+			return goSingleType(f.Type, body, replaceObjectType)
+		}
+		return "spanner.NullString"
+	case "Int":
+		if f.Type.NonNull {
+			return goSingleType(f.Type, body, replaceObjectType)
+		}
+		return "spanner.NullInt64"
 
+	case "Float":
+		if f.Type.NonNull {
+			return goSingleType(f.Type, body, replaceObjectType)
+		}
+		return "spanner.NullFloat64"
+	case "Boolean":
+		if f.Type.NonNull {
+			return goSingleType(f.Type, body, replaceObjectType)
+		}
+		return "spanner.NullBool"
+	case "": //list
+		return "[]" + addPtPrefixIfNull(f.Type.Elem) + goSingleType(f.Type.Elem, body, replaceObjectType)
+	default: // custom scalar, other object
+		if def, ok := body.Types[f.Type.NamedType]; ok {
+			if def.Kind == "ENUM" {
+				if f.Type.NonNull {
+					return addPtPrefixIfNull(f.Type) + goSingleType(f.Type, body, replaceObjectType)
+				}
+				return "spanner.NullString"
+			}
+			if def.Kind == "OBJECT" {
+				if f.Type.NonNull || !replaceObjectType {
+					return addPtPrefixIfNull(f.Type) + goSingleType(f.Type, body, replaceObjectType)
+				}
+				for _, df := range def.Fields {
+					desc := df.Description
+					if strings.Contains(desc, "SpannerPK") || strcase.ToCamel(df.Name) == "Id" || strcase.ToCamel(df.Name) == strcase.ToCamel(f.Type.NamedType+"Id") {
+						return spannerGoSingleType(f, body, false)
+					}
+
+				}
+				return "spanner.NullString"
+			}
+		}
+		return addPtPrefixIfNull(f.Type) + goSingleType(f.Type, body, replaceObjectType)
+	}
+	return ""
+}
 func loadGQL(b []byte) (*ast.Schema, error) {
 	astDoc, err := gqlparser.LoadSchema(&ast.Source{
 		Input: string(b),
