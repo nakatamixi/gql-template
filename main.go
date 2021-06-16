@@ -48,7 +48,8 @@ func main() {
 	}
 	funcMap := sprig.GenericFuncMap()
 	// sprig camelcase (xstrings.ToCamelCase) is not valid
-	funcMap["upperCamel"] = func(a string) string { return strcase.ToCamel(strings.ToLower(a)) }
+	funcMap["snakeToUpperCamel"] = func(a string) string { return strcase.ToCamel(strings.ToLower(a)) }
+	funcMap["lowerCamel"] = func(a string) string { return strcase.ToLowerCamel(a) }
 	funcMap["joinstr"] = func(a, b string) string { return a + b }
 	// TODO for cloud spanner type...
 	funcMap["GoType"] = func(f *ast.FieldDefinition, replaceObjectType bool) string {

@@ -39,7 +39,7 @@ type {{ $t.Name | title }} string
 
 const (
         {{- range $ei, $enum  := $t.EnumValues }}
-	{{ $t.Name | title }}{{ $enum.Name | upperCamel }}         {{ $t.Name | title }} = "{{ $enum.Name | title }}" 
+	{{ $t.Name | title }}{{ $enum.Name | snakeToUpperCamel }}         {{ $t.Name | title }} = "{{ $enum.Name | title }}" 
         {{- end }}
 )
 
