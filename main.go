@@ -75,15 +75,15 @@ func main() {
 		return false
 
 	}
-	funcMap["foundPK"] = func(objName string, fields ast.FieldList) string {
+	funcMap["foundPK"] = func(objName string, fields ast.FieldList) *ast.FieldDefinition {
 		for _, f := range fields {
 			desc := f.Description
 			if strings.Contains(desc, "SpannerPK") || strcase.ToCamel(f.Name) == "Id" || strcase.ToCamel(f.Name) == strcase.ToCamel(objName+"Id") {
-				return f.Name
+				return f
 			}
 
 		}
-		return ""
+		return nil
 	}
 	funcMap["ConvertObjectFieldName"] = func(f *ast.FieldDefinition) string {
 		desc := f.Description
