@@ -4,7 +4,6 @@ import (
     "time"
 
 	"cloud.google.com/go/spanner"
-	"github.com/xflagstudio/kangaroo-feed-uni/internal/pkg/util"
 )
 
 
