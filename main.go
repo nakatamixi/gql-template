@@ -85,11 +85,28 @@ func main() {
 		}
 		return nil
 	}
-	funcMap["ConvertObjectFieldName"] = func(f *ast.FieldDefinition) string {
+	funcMap["isObject"] = func(f *ast.FieldDefinition) bool {
+		return isObject(f, body)
+	}
+
+	funcMap["convertName"] = func(f *ast.FieldDefinition) string {
 		desc := f.Description
 		match := spanColumnRe.FindStringSubmatch(desc)
 		if match != nil && len(match) > 1 {
 			return match[1]
+		}
+		return f.Name
+	}
+
+	funcMap["ConvertObjectFieldName"] = func(f *ast.FieldDefinition) string {
+		if !isObject(f, body) {
+			return f.Name
+		}
+		name := f.Name
+		desc := f.Description
+		match := spanColumnRe.FindStringSubmatch(desc)
+		if match != nil && len(match) > 1 {
+			name = match[1]
 		}
 		namedType := f.Type.NamedType
 		isArray := false
@@ -100,14 +117,14 @@ func main() {
 		if def, ok := body.Types[namedType]; ok {
 			if def.Kind == "OBJECT" {
 				if isArray {
-					return inflection.Plural(inflection.Singular(f.Name) + "Id")
+					return inflection.Plural(inflection.Singular(name) + "Id")
 				}
-				return f.Name + "Id"
+				return name + "Id"
 			} else {
-				return f.Name
+				return name
 			}
 		}
-		return f.Name
+		return name
 	}
 	tpl := template.Must(template.New(t).Funcs(template.FuncMap(funcMap)).Parse(string(tb)))
 	if err := tpl.Execute(os.Stdout, *body); err != nil {
@@ -211,6 +228,19 @@ func spannerGoSingleType(f *ast.FieldDefinition, body *ast.Schema, replaceObject
 		return addPtPrefixIfNull(f.Type) + goSingleType(f.Type, body, replaceObjectType)
 	}
 	return ""
+}
+
+func isObject(f *ast.FieldDefinition, body *ast.Schema) bool {
+	namedType := f.Type.NamedType
+	if f.Type.NamedType == "" {
+		namedType = f.Type.Elem.NamedType
+	}
+	if def, ok := body.Types[namedType]; ok {
+		if def.Kind == "OBJECT" {
+			return true
+		}
+	}
+	return false
 }
 func loadGQL(b []byte) (*ast.Schema, error) {
 	astDoc, err := gqlparser.LoadSchema(&ast.Source{

@@ -15,9 +15,9 @@ type {{ $t.Name | title }} struct {
     {{- $pk := foundPK $t.Name $t.Fields }}
     {{ if not $pk }}{{ joinstr (title $t.Name) "Id" }}   string `spanner:"{{ untitle (joinstr $t.Name "Id") }}"`{{ end }}
         {{- range $fi, $f  := $t.Fields }}
+    {{ $f | convertName | title }}   {{ SpannerGoType $f false }} `{{ if not (isObject $f) }}spanner:"{{ $f | convertName }}" {{ end }}json:"{{ $f.Name }}"`
+          {{- if isObject $f }}
           {{- $cfn := ConvertObjectFieldName $f }}
-    {{ $f.Name | title }}   {{ SpannerGoType $f false }} `{{ if (eq $cfn $f.Name) }}spanner:"{{ $f.Name }}" {{ end }}json:"{{ $f.Name }}"`
-          {{- if not (eq $cfn $f.Name) }}
     {{ $cfn | title }}   {{ SpannerGoType $f true }} `spanner:"{{ $cfn }}"`
           {{- end }}
         {{- end }}
